@@ -309,11 +309,13 @@ end
 
 function M.extract_symbols_recursive(symbols, functions, start_line, end_line)
   for _, symbol in ipairs(symbols) do
-    -- Identify symbol kinds we care about (function / method / constructor)
+    -- Identify symbol kinds we care about (function / method / constructor / property / constant)
     local symbol_kinds = {
       [vim.lsp.protocol.SymbolKind.Function] = true,
       [vim.lsp.protocol.SymbolKind.Method] = true,
       [vim.lsp.protocol.SymbolKind.Constructor] = true,
+      [vim.lsp.protocol.SymbolKind.Property] = true,
+      [vim.lsp.protocol.SymbolKind.Constant] = true,
     }
 
     if symbol_kinds[symbol.kind] then
