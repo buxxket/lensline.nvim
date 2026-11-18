@@ -1,6 +1,7 @@
 # Agent Guide for lensline.nvim
 
 ## Build/Test Commands
+- Install test deps once: `luarocks --lua-version=5.1 --tree .rocks install luassert` (`.rocks` is gitignored)
 - Run all tests: `make test`
 - Run single test: `nvim --headless -u tests/minimal_init.lua -c "lua require('lensline.test_runner').run('tests/unit/test_config_spec.lua')"`
 - Docker tests: `make d-test` (tests on Neovim v0.8.3 and stable)

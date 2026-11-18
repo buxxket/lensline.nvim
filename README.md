@@ -185,6 +185,9 @@ lensline.nvim works out of the box with sensible defaults. You can customize it 
       debounce_ms = 500,        -- unified debounce delay for all providers
       focused_debounce_ms = 150, -- debounce delay for focus tracking in focused mode
       silence_lsp = true,       -- suppress noisy LSP log messages (e.g., Pyright reference spam)
+      lsp_readiness = {         -- client name -> notification that signals readiness
+        roslyn_ls = "workspace/projectInitializationComplete",
+      },
       debug_mode = false,       -- enable debug output for development, see CONTRIBUTE.md
     })
   end,
@@ -192,6 +195,8 @@ lensline.nvim works out of the box with sensible defaults. You can customize it 
 ```
 
 </details>
+
+Providers are deferred for clients listed in `lsp_readiness` until the configured notification arrives. This avoids premature zero-reference lenses with Roslyn, which finishes loading projects after `LspAttach`.
 
 ### Style Customizations
 
