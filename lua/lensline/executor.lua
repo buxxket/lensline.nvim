@@ -13,6 +13,134 @@ local execution_in_progress = {}
 -- Event listeners setup
 local event_listeners = {}
 
+local ready_clients = {}
+local pending_lsp_ready = {}
+local wrapped_clients = {}
+local lsp_readiness_group = nil
+
+local function get_all_clients()
+  if vim.lsp.get_clients then
+    return vim.lsp.get_clients()
+  end
+  return vim.lsp.get_active_clients()
+end
+
+local function get_lsp_clients(bufnr)
+  if not lens_explorer.get_lsp_clients then
+    return {}
+  end
+  return lens_explorer.get_lsp_clients(bufnr) or {}
+end
+
+local function get_clients_by_name(bufnr, name)
+  local clients = {}
+  for _, client in ipairs(get_lsp_clients(bufnr)) do
+    if client.name == name then
+      table.insert(clients, client)
+    end
+  end
+  return clients
+end
+
+local function is_lsp_ready(bufnr)
+  for client_name, _ in pairs(config.get().lsp_readiness or {}) do
+    for _, client in ipairs(get_clients_by_name(bufnr, client_name)) do
+      if not ready_clients[client.id] then
+        return false
+      end
+    end
+  end
+  return true
+end
+
+local function defer_until_lsp_ready(bufnr)
+  if is_lsp_ready(bufnr) then
+    return false
+  end
+  pending_lsp_ready[bufnr] = true
+  return true
+end
+
+local function wrap_client_handler(client, method)
+  if wrapped_clients[client.id] then
+    return
+  end
+  wrapped_clients[client.id] = true
+  local original = client.handlers and client.handlers[method]
+  client.handlers = client.handlers or {}
+  client.handlers[method] = function(result, params, ctx)
+    local ret
+    if original then
+      ret = original(result, params, ctx)
+    end
+    M.mark_lsp_ready(ctx and ctx.client_id or client.id)
+    return ret
+  end
+end
+
+function M.mark_lsp_ready(client_id)
+  ready_clients[client_id] = true
+  for bufnr, _ in pairs(pending_lsp_ready) do
+    if not utils.is_valid_buffer(bufnr) then
+      pending_lsp_ready[bufnr] = nil
+    else
+      local attached = false
+      for _, client in ipairs(get_lsp_clients(bufnr)) do
+        if client.id == client_id then
+          attached = true
+          break
+        end
+      end
+      if attached then
+        pending_lsp_ready[bufnr] = nil
+        vim.schedule(function()
+          if utils.is_valid_buffer(bufnr) then
+            M.trigger_unified_update(bufnr)
+          end
+        end)
+      end
+    end
+  end
+end
+
+function M.setup_lsp_readiness_listeners()
+  if lsp_readiness_group then
+    vim.api.nvim_del_augroup_by_id(lsp_readiness_group)
+  end
+  lsp_readiness_group = vim.api.nvim_create_augroup("lensline_lsp_readiness", { clear = true })
+  local readiness = config.get().lsp_readiness or {}
+  if vim.tbl_isempty(readiness) then
+    return
+  end
+  for _, client in ipairs(get_all_clients()) do
+    local method = readiness[client.name]
+    if method then
+      wrap_client_handler(client, method)
+    end
+  end
+  vim.api.nvim_create_autocmd("LspAttach", {
+    group = lsp_readiness_group,
+    callback = function(args)
+      local client = vim.lsp.get_client_by_id(args.data.client_id)
+      if not client then
+        return
+      end
+      local method = readiness[client.name]
+      if method then
+        wrap_client_handler(client, method)
+      end
+    end,
+  })
+end
+
+function M.cleanup_lsp_readiness_listeners()
+  if lsp_readiness_group then
+    vim.api.nvim_del_augroup_by_id(lsp_readiness_group)
+    lsp_readiness_group = nil
+  end
+  pending_lsp_ready = {}
+end
+
 -- Setup event listeners for all enabled providers
 function M.setup_event_listeners()
   local providers = require("lensline.providers")
@@ -55,6 +183,8 @@ function M.setup_event_listeners()
       end,
     })
   end
+
+  M.setup_lsp_readiness_listeners()
 end
 
 -- Trigger unified update for all enabled providers with unified debouncing
@@ -83,6 +213,12 @@ function M.trigger_unified_update(bufnr)
   if should_skip then
     local debug = require("lensline.debug")
     debug.log_context("Executor", "skipping unified update for buffer " .. bufnr .. ": " .. (reason or "unknown"))
+    return
+  end
+
+  if defer_until_lsp_ready(bufnr) then
+    local debug = require("lensline.debug")
+    debug.log_context("Executor", "deferring unified update for buffer " .. bufnr .. " - LSP not ready")
     return
   end
   
@@ -353,6 +489,7 @@ end
 function M.cleanup()
   M.cleanup_debounce_timers()
   M.cleanup_event_listeners()
+  M.cleanup_lsp_readiness_listeners()
   
   -- Clean up function discovery cache from lens_explorer
   lens_explorer.cleanup_cache()

@@ -94,6 +94,9 @@ M.defaults = {
   focused_debounce_ms = 150,  -- debounce delay for focus tracking in focused mode (in milliseconds)
   provider_timeout_ms = 5000, -- provider execution timeout (ms) for async safety net (test override supported)
   silence_lsp = true, -- suppress noisy LSP log messages (e.g., Pyright reference spam)
+  lsp_readiness = {
+    roslyn_ls = "workspace/projectInitializationComplete",
+  },
   debug_mode = false,
 }
 
@@ -123,7 +126,7 @@ end
 local function extract_global_settings(opts)
   local global_keys = {
     "limits", "debounce_ms", "focused_debounce_ms",
-    "provider_timeout_ms", "silence_lsp", "debug_mode"
+    "provider_timeout_ms", "silence_lsp", "lsp_readiness", "debug_mode"
   }
   
   local global_settings = {}

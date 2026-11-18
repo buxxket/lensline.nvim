@@ -3,6 +3,7 @@ local M = {}
 local config = require("lensline.config")
 local setup = require("lensline.setup")
 local commands = require("lensline.commands")
+local executor = require("lensline.executor")
 
 function M.setup(opts)
     config.setup(opts or {})
@@ -21,6 +22,7 @@ M.toggle = commands.toggle
 M.is_enabled = commands.is_enabled
 M.is_visible = commands.is_visible
 M.refresh = commands.refresh
+M.mark_lsp_ready = executor.mark_lsp_ready
 
 -- export profile management functions
 M.switch_profile = commands.switch_profile
